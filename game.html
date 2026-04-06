@@ -36,6 +36,12 @@
         alert("Level doesn't exist... are you sure you typed the ID correctly?");
         window.location.href = "https://lasokar.github.io/geometrydashdotcom/";
       }
+      if (event.data.type === "rate-limit") {
+        if (fix) return;
+        fix = true;
+        alert("Site is currently being rate limited from GD servers, please try again later!");
+        window.location.href = "https://lasokar.github.io/geometrydashdotcom/";
+      }
     });
   </script>
   <script>
