@@ -12,16 +12,52 @@
     </style>
   <script>
     var levelId = Number(new URLSearchParams(location.search).get('id')) || 1;
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = false;
+        script.onload = resolve;
+        script.onerror = () => reject(new Error(`Failed to load ${src}`));
+        document.body.appendChild(script);
+      });
+    }
+    function waitForServiceWorkerControl() {
+      if (navigator.serviceWorker.controller) {
+        return Promise.resolve();
+      }
+      return new Promise((resolve) => {
+        const onControllerChange = () => {
+          navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+          resolve();
+        };
+        navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+      });
+    }
     async function start() {
       await navigator.serviceWorker.register('/geometrydashdotcom/worker.js');
       await navigator.serviceWorker.ready;
+      await waitForServiceWorkerControl();
 
       navigator.serviceWorker.controller?.postMessage({ levelId });
 
-      const script = document.createElement('script');
-      script.type = 'module';
-      script.src = './assets/index-game.js';
-      document.body.appendChild(script);
+      const runtimeScripts = [
+        './assets/vendor/phaser.js',
+        './assets/vendor/pako.js',
+        './assets/src/shared/core-constants.js',
+        './assets/src/parsing/level-codec.js',
+        './assets/src/data/object-definitions.js',
+        './assets/src/runtime/level-runtime.js',
+        './assets/src/runtime/player-runtime.js',
+        './assets/src/runtime/color-audio.js',
+        './assets/src/runtime/effects.js',
+        './assets/src/scenes/game-scene.js',
+        './assets/src/index.js',
+      ];
+
+      for (const scriptPath of runtimeScripts) {
+        await loadScript(scriptPath);
+      }
     }
     function updateLevelName() {
       const officialLevels = [
