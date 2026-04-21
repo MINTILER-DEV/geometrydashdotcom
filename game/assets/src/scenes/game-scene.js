@@ -101,6 +101,7 @@ class GameScene extends s.Scene {
       (this._firstPlay = !0),
       this._player.setCubeVisible(!1),
       this._player.setShipVisible(!1),
+      this._player.setBallVisible(!1),
       (this._debugGraphics = this.add.graphics().setDepth(99)),
       (this._logo = this.add
         .image(0, 100, "GJ_WebSheet", "GJ_logo_001.png")
@@ -1138,7 +1139,6 @@ class GameScene extends s.Scene {
       this._level.additiveContainer.setVisible(!0),
       this._level.container.setVisible(!0),
       this._level.topContainer.setVisible(!0),
-      this._player.setCubeVisible(!0),
       this._player.reset(),
       this._attemptsLabel.setVisible(this._attempts > 1),
       this._positionAttemptsLabel();
@@ -1230,7 +1230,11 @@ class GameScene extends s.Scene {
       const t = e[this._startPosIndex];
       (this._playerWorldX = t.x),
         (this._state.y = t.y),
-        t.isFlying && this._player.enterShipMode(),
+        H === t.mode
+          ? this._player.enterShipMode()
+          : j === t.mode
+            ? this._player.enterBallMode()
+            : this._player.enterCubeMode(),
         (this._state.gravityFlipped = t.gravityFlipped),
         this._level.fastForwardTriggers(t.x, this._colorManager),
         (i = t.x / 623.16);
@@ -1341,14 +1345,6 @@ class GameScene extends s.Scene {
       this._noclipIndicator.setVisible(
         1 === window.noclip && !this._menuActive,
       ),
-      this._menuActive ||
-        this._slideIn ||
-        !this._showHitboxes ||
-        this._player.drawHitboxes(
-          this._debugGraphics,
-          this._cameraX,
-          this._cameraY,
-        ),
       (this._fpsAccum += e),
       this._fpsFrames++,
       this._fpsAccum >= 250 &&
@@ -1379,7 +1375,8 @@ class GameScene extends s.Scene {
         (this._prevCameraX = this._menuCameraX),
         (this._cameraXRef._v = this._menuCameraX),
         this._level.stepGroundAnimation(e / 1e3),
-        void this._level.updateGroundTiles(this._cameraY)
+        this._level.updateGroundTiles(this._cameraY),
+        void this._renderDebugHitboxes()
       );
     }
     if (this._slideIn) {
@@ -1426,7 +1423,7 @@ class GameScene extends s.Scene {
             duration: 500,
           });
       }
-      return;
+      return void this._renderDebugHitboxes();
     }
     let jumpHeld =
       this._spaceKey.isDown || this._upKey.isDown || this._wKey.isDown;
@@ -1464,7 +1461,8 @@ class GameScene extends s.Scene {
         (this._level.topContainer.y = this._cameraY),
         this._updateBackground(),
         this._level.stepGroundAnimation(e / 1e3),
-        void this._level.updateGroundTiles(this._cameraY)
+        this._level.updateGroundTiles(this._cameraY),
+        void this._renderDebugHitboxes()
       );
     }
     if (this._state.isDead) {
@@ -1489,7 +1487,10 @@ class GameScene extends s.Scene {
       }
       this._player.updateExplosionPieces(e), (this._deathTimer += e);
       let t = this._hadNewBest ? 1400 : 1e3;
-      return void (this._deathTimer > t && this._restartLevel());
+      return (
+        this._renderDebugHitboxes(),
+        void (this._deathTimer > t && this._restartLevel())
+      );
     }
     (this._playTime += e / 1e3),
       this._audio.update(e / 1e3),
@@ -1582,6 +1583,18 @@ class GameScene extends s.Scene {
       e / 1e3,
       playerScreenX,
     );
+    this._renderDebugHitboxes();
+  }
+  _renderDebugHitboxes() {
+    this._menuActive ||
+    this._slideIn ||
+    !this._showHitboxes
+      ? this._debugGraphics.clear()
+      : this._player.drawHitboxes(
+          this._debugGraphics,
+          this._cameraX,
+          this._cameraY,
+        );
   }
   _showNewBest() {
     let t = n / 2,
@@ -1823,26 +1836,36 @@ class GameScene extends s.Scene {
       r = s ? 460 / s.height : 1;
     this._endLayerInternal.add(
       this.add
-        .image(i - 40, 80, "GJ_WebSheet", "GJ_table_side_001.png")
+        .image(panelLeft - 40, 80, "GJ_WebSheet", "GJ_table_side_001.png")
         .setOrigin(0, 0)
         .setScale(1, r),
     ),
       this._endLayerInternal.add(
         this.add
-          .image(i + 712 + 40, 80, "GJ_WebSheet", "GJ_table_side_001.png")
+          .image(
+            panelLeft + 712 + 40,
+            80,
+            "GJ_WebSheet",
+            "GJ_table_side_001.png",
+          )
           .setOrigin(1, 0)
           .setFlipX(!0)
           .setScale(1, r),
       );
     const o = this.add.image(
-      i + 356,
+      panelLeft + 356,
       70,
       "GJ_WebSheet",
       "GJ_table_top_001.png",
     );
     this._endLayerInternal.add(o),
       this._endLayerInternal.add(
-        this.add.image(i + 356, 560, "GJ_WebSheet", "GJ_table_bottom_001.png"),
+        this.add.image(
+          panelLeft + 356,
+          560,
+          "GJ_WebSheet",
+          "GJ_table_bottom_001.png",
+        ),
       );
     const h = o.y - 65;
     this._endLayerInternal.add(

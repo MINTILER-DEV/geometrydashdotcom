@@ -69,9 +69,28 @@ class PlayerRuntime {
       );
       s.setDepth(10).setVisible(!1), (this._shipSpriteLayer = { sprite: s });
     }
-    this._shipOverlayLayer && this._shipOverlayLayer.sprite.setTint(v),
+    const ballFrameName = findTextureFrame(t, "player_ball_00_001.png")
+      ? "player_ball_00_001.png"
+      : "d_ball_01_001.png";
+    if (
+      ((this._ballGlowLayer = ws(t, i, e, "player_ball_00_glow_001.png", 9, !1)),
+      (this._ballSpriteLayer = ws(t, i, e, ballFrameName, 10, !1)),
+      (this._ballOverlayLayer = ws(t, i, e, "player_ball_00_2_001.png", 8, !1)),
+      this._ballGlowLayer &&
+        (this._ballGlowLayer.sprite.setTint(v),
+        (this._ballGlowLayer.sprite._glowEnabled = !1)),
+      this._ballSpriteLayer)
+    )
+      this._ballSpriteLayer.sprite.setTint(g);
+    else {
+      let s = t.add.circle(i, e, 26, g);
+      s.setDepth(10).setVisible(!1), (this._ballSpriteLayer = { sprite: s });
+    }
+    this._ballOverlayLayer && this._ballOverlayLayer.sprite.setTint(v),
+      this._shipOverlayLayer && this._shipOverlayLayer.sprite.setTint(v),
       (this.playerSprite = this._playerSpriteLayer.sprite),
       (this.shipSprite = this._shipSpriteLayer.sprite),
+      (this.ballSprite = this._ballSpriteLayer.sprite),
       (this._playerLayers = [
         this._playerSpriteLayer,
         this._playerGlowLayer,
@@ -84,7 +103,16 @@ class PlayerRuntime {
         this._shipOverlayLayer,
         this._shipExtraLayer,
       ]),
-      (this._allLayers = [...this._playerLayers, ...this._shipLayers]);
+      (this._ballLayers = [
+        this._ballSpriteLayer,
+        this._ballGlowLayer,
+        this._ballOverlayLayer,
+      ]),
+      (this._allLayers = [
+        ...this._playerLayers,
+        ...this._shipLayers,
+        ...this._ballLayers,
+      ]);
   }
   _initParticles(t) {
     const e = this.flipMod();
@@ -249,6 +277,14 @@ class PlayerRuntime {
       this._shipOverlayLayer && this._shipOverlayLayer.sprite.setVisible(t),
       this._shipExtraLayer && this._shipExtraLayer.sprite.setVisible(t);
   }
+  setBallVisible(t) {
+    this._ballSpriteLayer.sprite.setVisible(t),
+      this._ballGlowLayer &&
+        this._ballGlowLayer.sprite.setVisible(
+          t && this._ballGlowLayer.sprite._glowEnabled,
+        ),
+      this._ballOverlayLayer && this._ballOverlayLayer.sprite.setVisible(t);
+  }
   syncSprites(t, e, i, s) {
     if (this._endAnimating) return;
     const r = void 0 !== s ? s : l,
@@ -288,10 +324,27 @@ class PlayerRuntime {
           (h.sprite.y = n),
           (h.sprite.rotation = a),
           h.sprite.setScale(1));
+    this.p.mode === j &&
+      (this._ballSpriteLayer && this._ballSpriteLayer.sprite.setScale(1),
+      this._ballGlowLayer && this._ballGlowLayer.sprite.setScale(1),
+      this._ballOverlayLayer && this._ballOverlayLayer.sprite.setScale(1));
     this._updateParticles(t, e, i);
+  }
+  enterCubeMode() {
+    (this.p.mode = q),
+      (this.p.isFlying = !1),
+      this._scene.toggleGlitter(!1),
+      this._gameLayer.setFlyMode(!1, 0),
+      this._gameLayer.setSurfaceCeilingVisible(!1),
+      this._streak.stop(),
+      this._streak.reset(),
+      this.setCubeVisible(!0),
+      this.setShipVisible(!1),
+      this.setBallVisible(!1);
   }
   enterShipMode(t = null) {
     if (this.p.isFlying) return;
+    this.p.mode = H;
     (this.p.isFlying = !0),
       this._scene.toggleGlitter(!0),
       (this.p.yVelocity *= 0.5),
@@ -304,6 +357,7 @@ class PlayerRuntime {
       (this._flyParticle2Active = !1),
       this._streak.reset(),
       this._streak.start(),
+      this.setBallVisible(!1),
       this.setShipVisible(!0);
     for (const i of this._playerLayers)
       i && i.sprite.setScale(0.55, 0.55 * this.flipMod());
@@ -333,16 +387,53 @@ class PlayerRuntime {
         this._streak.stop(),
         this._streak.reset(),
         this.setShipVisible(!1),
-        this.setCubeVisible(!0);
+        this.enterCubeMode();
       for (const t of this._playerLayers) t && t.sprite.setScale(1);
       this._gameLayer.setFlyMode(!1, 0);
     }
+  }
+  enterBallMode() {
+    this.exitShipMode(),
+      (this.p.mode = j),
+      (this.p.isFlying = !1),
+      (this.p.onGround = !1),
+      (this.p.onCeiling = !1),
+      (this.p.canJump = !0),
+      (this.p.isJumping = !1),
+      this._scene.toggleGlitter(!1),
+      this._streak.stop(),
+      this._streak.reset(),
+      this._gameLayer.setFlyMode(!1, 0),
+      this._gameLayer.setSurfaceCeilingVisible(!0),
+      this.setCubeVisible(!1),
+      this.setShipVisible(!1),
+      this.setBallVisible(!0);
+  }
+  _toggleBallGravity() {
+    this.p.gravityFlipped = !this.p.gravityFlipped;
+    this.p.onGround = !1;
+    this.p.onCeiling = !1;
+    this.p.canJump = !1;
+    this.p.isJumping = !1;
+    this.p.isBuffering = !1;
+    this.p.yVelocity *= 0.6;
+    this.runRotateAction();
+  }
+  _isBallSurfaceAttached() {
+    return (
+      this.p.mode === j &&
+      (this.p.onGround ||
+        this.p.onCeiling ||
+        0 !== this.p.collideBottom ||
+        0 !== this.p.collideTop)
+    );
   }
   hitGround() {
     if (
       1 == this.p.gravityFlipped &&
       this.p.yVelocity < -0.5 &&
-      !this.p.isFlying
+      !this.p.isFlying &&
+      this.p.mode !== j
     )
       return void this.killPlayer();
     const t = !this.p.onGround;
@@ -715,6 +806,8 @@ class PlayerRuntime {
         (this.p.isBuffering = !0),
       this.p.isFlying
         ? this._updateFlyJump(t, e)
+        : this.p.mode === j
+          ? this._updateBallJump(t, e, i)
         : this.p.upKeyDown && this.p.canJump && !e
           ? (this.p.touchingOrb && (this.p.isBuffering = !0),
             (this.p.isJumping = !0),
@@ -744,6 +837,25 @@ class PlayerRuntime {
                 (this.p.onGround = !1)),
       (this.p.wasUpKeyDown = this.p.upKeyDown);
   }
+  _updateBallJump(t, e = !1, i = !1) {
+    i &&
+      this.p.canJump &&
+      !e &&
+      !this.p.touchingOrb &&
+      this._isBallSurfaceAttached() &&
+      this._toggleBallGravity();
+    this.playerIsFalling() && (this.p.canJump = !1);
+    this.p.yVelocity -= U * t * this.flipMod();
+    this.p.gravityFlipped
+      ? (this.p.yVelocity = Math.min(this.p.yVelocity, 30))
+      : (this.p.yVelocity = Math.max(this.p.yVelocity, -30));
+    this._isFallingPastThreshold() &&
+      !this.rotateActionActive &&
+      this.runRotateAction();
+    this.playerIsFalling() &&
+      (this.p.gravityFlipped ? this.p.yVelocity > 4 : this.p.yVelocity < -4) &&
+      (this.p.onGround = !1);
+  }
   _updateFlyJump(t, e = 0) {
     let i = 0.8;
     this.p.upKeyDown && !this.p.wasBoosted && !e && (i = -1),
@@ -771,6 +883,20 @@ class PlayerRuntime {
     let a = !1;
     const o = this._gameLayer.getNearbySectionObjects(i);
     s >= 5e3 && this.killPlayer(), (this.p.touchingOrb = !1);
+    const overlappingHazard = o.some((l) => {
+      if (l.type !== y) return !1;
+      const hazardLeft = l.x - l.w / 2,
+        hazardRight = l.x + l.w / 2,
+        hazardBottom = l.y - l.h / 2,
+        hazardTop = l.y + l.h / 2;
+      return !(
+        i + 30 <= hazardLeft ||
+        i - 30 >= hazardRight ||
+        s + e <= hazardBottom ||
+        s - e >= hazardTop
+      );
+    });
+    if (overlappingHazard && 1 !== window.noclip) return void this.killPlayer();
     for (let l of o) {
       let t = l.x - l.w / 2,
         o = l.x + l.w / 2,
@@ -778,7 +904,7 @@ class PlayerRuntime {
         u = l.y + l.h / 2;
       if (!(i + 30 <= t || i - 30 >= o || s + e <= h || s - e >= u))
         if ((l.type, l.type !== b))
-          if (l.type !== S) {
+          if (l.type !== S && l.type !== Y) {
             if (
               (l.type === E &&
                 (l.activated ||
@@ -802,6 +928,7 @@ class PlayerRuntime {
                 (this.p.isPadJumping = !0),
                 (this.p.isJumping = !1),
                 (this.p.onGround = !1),
+                (this.p.onCeiling = !1),
                 (this.p.canJump = !1),
                 this.runRotateAction(),
                 (l.activated = !0);
@@ -826,29 +953,34 @@ class PlayerRuntime {
               (this.p.touchingOrb = !0),
                 this.p.isBuffering &&
                   ((this.p.yVelocity = 22.2 * this.flipMod()),
-                  (this.p.isPadJumping = !0),
-                  (this.p.isBuffering = !1),
-                  (this.p.isJumping = !1),
-                  (this.p.onGround = !1),
-                  (this.p.canJump = !1),
-                  this.runRotateAction(),
-                  (l.activated = !0));
+                    (this.p.isPadJumping = !0),
+                    (this.p.isBuffering = !1),
+                    (this.p.isJumping = !1),
+                    (this.p.onGround = !1),
+                    (this.p.onCeiling = !1),
+                    (this.p.canJump = !1),
+                    this.runRotateAction(),
+                    (l.activated = !0));
             }
             if (l.type === T) {
               if (l.activated) return;
               (this.p.touchingOrb = !0),
                 this.p.isBuffering &&
                   ((this.p.yVelocity = 10 * this.flipMod()),
-                  (this.p.gravityFlipped = !this.p.gravityFlipped),
-                  (this.p.isPadJumping = !0),
-                  (this.p.isBuffering = !1),
-                  (this.p.isJumping = !1),
-                  (this.p.onGround = !1),
-                  (this.p.canJump = !1),
-                  this.runRotateAction(),
-                  (l.activated = !0));
+                    (this.p.gravityFlipped = !this.p.gravityFlipped),
+                    (this.p.isPadJumping = !0),
+                    (this.p.isBuffering = !1),
+                    (this.p.isJumping = !1),
+                    (this.p.onGround = !1),
+                    (this.p.onCeiling = !1),
+                    (this.p.canJump = !1),
+                    this.runRotateAction(),
+                    (l.activated = !0));
             }
-            if (l.type === y) return void this.killPlayer();
+            if (l.type === y) {
+              if (1 !== window.noclip) return void this.killPlayer();
+              continue;
+            }
             if (l.type === m) {
               let c = s - e + n,
                 d = r - e + n,
@@ -862,7 +994,10 @@ class PlayerRuntime {
                 _ =
                   (v || this.p.onGround) &&
                   (1 === g ? c >= u || d >= u : p <= h || f <= h);
-              if (x && !_) return void this.killPlayer();
+              if (x && !_) {
+                if (1 !== window.noclip) return void this.killPlayer();
+                continue;
+              }
               if (i + 30 - 5 > t && i - 30 + 5 < o) {
                 if (_) {
                   (this.p.y = 1 === g ? u + e : h - e),
@@ -892,7 +1027,7 @@ class PlayerRuntime {
             l.activated ||
               ((l.activated = !0),
               this._playPortalShine(l, 1),
-              this.exitShipMode());
+              l.type === Y ? this.enterBallMode() : this.enterCubeMode());
         else
           l.activated ||
             ((l.activated = !0),
@@ -904,20 +1039,33 @@ class PlayerRuntime {
       0 !== this.p.collideBottom &&
       Math.abs(this.p.collideTop - this.p.collideBottom) < 48
     )
-      return void this.killPlayer();
+      if (1 !== window.noclip) return void this.killPlayer();
     let h = this._gameLayer.getFloorY();
     a || (this.p.y <= h + 30 && ((this.p.y = h + 30), this.hitGround()));
     let u = this._gameLayer.getCeilingY();
     if (
       (null !== u &&
+        (this.p.isFlying || this.p.mode === j) &&
         this.p.y >= u - 30 &&
-        ((this.p.y = u - 30), this.hitGround(), (this.p.onCeiling = !0)),
+        ((this.p.y = u - 30),
+        this.hitGround(),
+        (this.p.onCeiling = !0),
+        this.p.mode === j && ((this.p.onGround = !0), (this.p.canJump = !0))),
       this.p.isFlying)
     ) {
       const t = this.p.y <= h + 30,
         e = null !== u && this.p.y >= u - 30;
       a || t || 0 !== this.p.collideTop || e || (this.p.onGround = !1);
     }
+    this.p.mode === j &&
+      (this.p.onGround =
+        this.p.onGround ||
+        this.p.y <= h + 30 ||
+        (null !== u && this.p.y >= u - 30) ||
+        0 !== this.p.collideTop ||
+        0 !== this.p.collideBottom,
+      this.p.onCeiling = null !== u && this.p.y >= u - 30,
+      this.p.onGround || (this.p.canJump = !1));
   }
   drawHitboxes(t, e, i) {
     if ((t.clear(), !this._showHitboxes)) return;
@@ -1055,8 +1203,7 @@ class PlayerRuntime {
       (this._rotation = 0),
       (this._lastCameraX = 0),
       (this._lastCameraY = 0),
-      this.setCubeVisible(!0),
-      this.setShipVisible(!1);
+      this.enterCubeMode();
     for (const t of this._allLayers) t && t.sprite.setAlpha(1);
     for (const t of this._playerLayers) t && t.sprite.setScale(1);
     this._particleEmitter.stop(),

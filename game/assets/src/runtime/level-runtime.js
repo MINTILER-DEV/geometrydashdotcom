@@ -21,6 +21,7 @@ class LevelRuntime {
       (this._groundTargetValue = 0),
       (this._flyFloorY = 0),
       (this._flyCeilingY = 0),
+      (this._surfaceCeilingVisible = !1),
       (this.flyCameraTarget = null),
       (this._colorTriggers = []),
       (this._colorTriggerIdx = 0),
@@ -192,7 +193,8 @@ class LevelRuntime {
     let s,
       r,
       n = this._maxGroundWorldX || -1 / 0;
-    if (this._flyGroundActive && this._groundTargetValue > 0.001) {
+    const showFlyBounds = this._flyGroundActive && this._groundTargetValue > 0.001;
+    if (showFlyBounds) {
       let e = this._groundTargetValue,
         i = 620,
         n = 20;
@@ -200,7 +202,7 @@ class LevelRuntime {
         (r = this._ceilingStartScreenY + (n - this._ceilingStartScreenY) * e);
       let a = gameYToScreenY(0) + t;
       s > a && (s = a);
-    } else (s = gameYToScreenY(0) + t), (r = 0);
+    } else (s = gameYToScreenY(0) + t), (r = this._surfaceCeilingVisible ? 20 : 0);
     for (let o = 0; o < this._groundTiles.length; o++) {
       let t = this._groundTiles[o],
         a = this._ceilingTiles[o];
@@ -214,15 +216,15 @@ class LevelRuntime {
         (t.y = s),
         (a.x = h),
         (a.y = r),
-        a.setVisible(this._flyGroundActive && this._groundTargetValue > 0);
+        a.setVisible(showFlyBounds || this._surfaceCeilingVisible);
     }
     (this._groundLine.y = s),
-      this._flyGroundActive && this._groundTargetValue > 0
+      showFlyBounds || this._surfaceCeilingVisible
         ? ((this._ceilingLine.y = r), this._ceilingLine.setVisible(!0))
         : this._ceilingLine.setVisible(!1),
       (this._groundShadowL.y = s),
       (this._groundShadowR.y = s);
-    let a = this._flyGroundActive && this._groundTargetValue > 0;
+    let a = showFlyBounds || this._surfaceCeilingVisible;
     (this._ceilingShadowL.y = r),
       (this._ceilingShadowR.y = r),
       this._ceilingShadowL.setVisible(a),
@@ -243,6 +245,7 @@ class LevelRuntime {
   }
   resetGroundState() {
     (this._flyGroundActive = !1),
+      (this._surfaceCeilingVisible = !1),
       (this._groundTargetValue = 0),
       (this._groundAnimating = !1),
       (this._groundY = 0),
@@ -300,7 +303,10 @@ class LevelRuntime {
     return this._flyGroundActive ? this._flyFloorY : 0;
   }
   getCeilingY() {
-    return this._flyGroundActive ? this._flyCeilingY : null;
+    return this._flyGroundActive ? this._flyCeilingY : this._surfaceCeilingVisible ? 600 : null;
+  }
+  setSurfaceCeilingVisible(visible) {
+    this._surfaceCeilingVisible = !!visible;
   }
   _applyVisualProps(t, e, i, s, r = null) {
     if (!e) return;
@@ -395,11 +401,11 @@ class LevelRuntime {
         continue;
       }
       if (t && t.type === X) {
-        let t = 0 !== r.gameMode;
         this._startPositions.push({
           x: 2 * r.x,
           y: 2 * r.y,
-          isFlying: t,
+          mode: decodeStartPositionMode(r.gameMode),
+          isFlying: 1 === r.gameMode,
           gravityFlipped: r.flipGravity,
         });
       }
@@ -562,6 +568,8 @@ class LevelRuntime {
               ? (r = b)
               : "cube" === t.sub
                 ? (r = S)
+                : "ball" === t.sub
+                  ? (r = Y)
                 : "flip" === t.sub
                   ? (r = E)
                   : "normal" === t.sub && (r = A),

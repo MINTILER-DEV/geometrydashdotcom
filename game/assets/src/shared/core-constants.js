@@ -23,12 +23,177 @@ function syncBlendModeAliases() {
   M = ADDITIVE_BLEND_MODE;
   P = NORMAL_BLEND_MODE;
 }
+
+function getElementChildren(node) {
+  return Array.from(node.childNodes).filter((childNode) => childNode.nodeType === 1);
+}
+
+function parsePlistValueNode(valueNode) {
+  switch (valueNode.tagName) {
+    case "dict":
+      return parsePlistDictNode(valueNode);
+    case "array":
+      return getElementChildren(valueNode).map(parsePlistValueNode);
+    case "string":
+      return valueNode.textContent || "";
+    case "integer":
+      return parseInt(valueNode.textContent || "0", 10);
+    case "real":
+      return parseFloat(valueNode.textContent || "0");
+    case "true":
+      return !0;
+    case "false":
+      return !1;
+    default:
+      return valueNode.textContent || "";
+  }
+}
+
+function parsePlistDictNode(dictNode) {
+  const childElements = getElementChildren(dictNode),
+    parsedObject = {};
+  for (let childIndex = 0; childIndex < childElements.length; childIndex += 2) {
+    const keyNode = childElements[childIndex],
+      valueNode = childElements[childIndex + 1];
+    keyNode &&
+      valueNode &&
+      "key" === keyNode.tagName &&
+      (parsedObject[keyNode.textContent || ""] = parsePlistValueNode(valueNode));
+  }
+  return parsedObject;
+}
+
+function parsePlistDocument(plistText) {
+  const plistDocument = new DOMParser().parseFromString(plistText, "application/xml"),
+    parseErrorNode = plistDocument.querySelector("parsererror");
+  if (parseErrorNode)
+    throw new Error("Failed to parse plist atlas data: " + parseErrorNode.textContent);
+  const plistRoot = plistDocument.querySelector("plist > dict");
+  if (!plistRoot) throw new Error("Invalid plist atlas document");
+  return parsePlistDictNode(plistRoot);
+}
+
+function parsePlistTuple(tupleText) {
+  return (tupleText.match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+}
+
+function buildSpriteSourceOffset(
+  sourceWidth,
+  sourceHeight,
+  trimmedWidth,
+  trimmedHeight,
+  spriteOffsetX,
+  spriteOffsetY,
+) {
+  return {
+    x: Math.round((sourceWidth - trimmedWidth) / 2 + spriteOffsetX),
+    y: Math.round((sourceHeight - trimmedHeight) / 2 - spriteOffsetY),
+  };
+}
+
+function convertPlistAtlasToPhaserHash(plistText) {
+  const plistData = parsePlistDocument(plistText),
+    frameEntries = plistData.frames || {},
+    convertedFrames = {};
+  for (const [frameName, frameData] of Object.entries(frameEntries)) {
+    const textureRectValues = parsePlistTuple(frameData.textureRect || ""),
+      spriteSizeValues = parsePlistTuple(frameData.spriteSize || ""),
+      sourceSizeValues = parsePlistTuple(frameData.spriteSourceSize || ""),
+      spriteOffsetValues = parsePlistTuple(frameData.spriteOffset || ""),
+      sourceWidth = sourceSizeValues[0] || spriteSizeValues[0] || textureRectValues[2] || 0,
+      sourceHeight = sourceSizeValues[1] || spriteSizeValues[1] || textureRectValues[3] || 0,
+      trimmedWidth = spriteSizeValues[0] || textureRectValues[2] || 0,
+      trimmedHeight = spriteSizeValues[1] || textureRectValues[3] || 0,
+      spriteOffsetX = spriteOffsetValues[0] || 0,
+      spriteOffsetY = spriteOffsetValues[1] || 0,
+      spriteSourceOffset = buildSpriteSourceOffset(
+        sourceWidth,
+        sourceHeight,
+        trimmedWidth,
+        trimmedHeight,
+        spriteOffsetX,
+        spriteOffsetY,
+      ),
+      isRotated = !!frameData.textureRotated,
+      atlasFrameWidth = isRotated
+        ? textureRectValues[3] || trimmedHeight
+        : textureRectValues[2] || trimmedWidth,
+      atlasFrameHeight = isRotated
+        ? textureRectValues[2] || trimmedWidth
+        : textureRectValues[3] || trimmedHeight,
+      isTrimmed =
+        spriteSourceOffset.x !== 0 ||
+        spriteSourceOffset.y !== 0 ||
+        trimmedWidth !== sourceWidth ||
+        trimmedHeight !== sourceHeight;
+    convertedFrames[frameName] = {
+      frame: {
+        x: textureRectValues[0] || 0,
+        y: textureRectValues[1] || 0,
+        w: atlasFrameWidth,
+        h: atlasFrameHeight,
+      },
+      rotated: isRotated,
+      trimmed: isTrimmed,
+      spriteSourceSize: {
+        x: spriteSourceOffset.x,
+        y: spriteSourceOffset.y,
+        w: trimmedWidth,
+        h: trimmedHeight,
+      },
+      sourceSize: {
+        w: sourceWidth,
+        h: sourceHeight,
+      },
+      gjSpriteOffset: {
+        x: spriteOffsetX,
+        y: spriteOffsetY,
+      },
+    };
+  }
+  return {
+    frames: convertedFrames,
+    meta: {
+      image:
+        (plistData.metadata && plistData.metadata.textureFileName) || "atlas.png",
+      size: {
+        w: parsePlistTuple((plistData.metadata && plistData.metadata.size) || "{0,0}")[0] || 0,
+        h: parsePlistTuple((plistData.metadata && plistData.metadata.size) || "{0,0}")[1] || 0,
+      },
+      scale: "1",
+    },
+  };
+}
+
+function buildAtlasFromPlist(scene, atlasKey, rawImageKey, plistCacheKey) {
+  if (scene.textures.exists(atlasKey)) return;
+  const rawTexture = scene.textures.get(rawImageKey),
+    plistText = scene.cache.text.get(plistCacheKey);
+  if (!rawTexture || !plistText)
+    throw new Error("Missing raw atlas assets for " + atlasKey);
+  const sourceImage = rawTexture.source[0].image,
+    atlasData = convertPlistAtlasToPhaserHash(plistText),
+    texture = scene.textures.addAtlasJSONHash(atlasKey, sourceImage, atlasData);
+  for (const [frameName, frameConfig] of Object.entries(atlasData.frames)) {
+    const frame = texture.get(frameName);
+    frame &&
+      (frame.customData = {
+        ...(frame.customData || {}),
+        gjSpriteOffset: frameConfig.gjSpriteOffset,
+        spriteSourceSize: frameConfig.spriteSourceSize,
+      });
+  }
+}
 const FIXED_TIME_STEP_SECONDS = 1 / 240,
   BASE_PLAYER_SPEED = 11.540004,
   GAMEPLAY_SPEED_SCALE = 0.9,
   BASE_GRAVITY_ACCELERATION = 1.916398,
+  BALL_GRAVITY_ACCELERATION = 1.7,
   PRIMARY_GLOW_TINT = 65280,
   SECONDARY_GLOW_TINT = 65535,
+  PLAYER_MODE_CUBE = "cube",
+  PLAYER_MODE_SHIP = "ship",
+  PLAYER_MODE_BALL = "ball",
   COLLISION_TYPE_SOLID = "solid",
   COLLISION_TYPE_HAZARD = "hazard",
   PAD_TYPE_YELLOW = "yellow_pad",
@@ -37,6 +202,7 @@ const FIXED_TIME_STEP_SECONDS = 1 / 240,
   RING_TYPE_BLUE = "blue_ring",
   PORTAL_MODE_SHIP = "portal_fly",
   PORTAL_MODE_CUBE = "portal_cube",
+  PORTAL_MODE_BALL = "portal_ball",
   PORTAL_MODE_FLIP = "portal_flip",
   PORTAL_MODE_NORMAL = "portal_normal";
 
@@ -68,8 +234,12 @@ const c = FIXED_TIME_STEP_SECONDS,
   d = BASE_PLAYER_SPEED,
   p = GAMEPLAY_SPEED_SCALE,
   f = BASE_GRAVITY_ACCELERATION,
+  U = BALL_GRAVITY_ACCELERATION,
   g = PRIMARY_GLOW_TINT,
   v = SECONDARY_GLOW_TINT,
+  q = PLAYER_MODE_CUBE,
+  H = PLAYER_MODE_SHIP,
+  j = PLAYER_MODE_BALL,
   m = COLLISION_TYPE_SOLID,
   y = COLLISION_TYPE_HAZARD,
   x = PAD_TYPE_YELLOW,
@@ -78,6 +248,7 @@ const c = FIXED_TIME_STEP_SECONDS,
   T = RING_TYPE_BLUE,
   b = PORTAL_MODE_SHIP,
   S = PORTAL_MODE_CUBE,
+  Y = PORTAL_MODE_BALL,
   E = PORTAL_MODE_FLIP,
   A = PORTAL_MODE_NORMAL,
   R = OBJECT_GROUP_SOLID,
@@ -206,6 +377,18 @@ class BootScene extends s.Scene {
       }
       var customAdditiveBlendMode;
     })(this.game);
+    const officialLevelId =
+        "number" == typeof window.levelId && window.levelId < 0
+          ? window.levelId
+          : null,
+      levelTextPath =
+        null !== officialLevelId
+          ? `assets/levels/${officialLevelId}.txt`
+          : "assets/1.txt",
+      musicPath =
+        null !== officialLevelId
+          ? `assets/music/${officialLevelId}.mp3`
+          : "assets/StereoMadness.mp3";
     let viewportWidth = this.cameras.main.width,
       viewportHeight = this.cameras.main.height,
       progressBarWidth = 0.6 * viewportWidth,
@@ -248,6 +431,14 @@ class BootScene extends s.Scene {
         "assets/GJ_GameSheet04.png",
         "assets/GJ_GameSheet04.json",
       ),
+      this.load.image(
+        "PlayerBallIconRaw",
+        "assets/extraicons/player_ball_00-hd.png",
+      ),
+      this.load.text(
+        "PlayerBallIconPlist",
+        "assets/extraicons/player_ball_00-hd.plist",
+      ),
       this.load.image("bigFont", "assets/bigFont.png"),
       this.load.text("bigFontFnt", "assets/bigFont.fnt"),
       this.load.image("goldFont", "assets/goldFont.png"),
@@ -256,8 +447,8 @@ class BootScene extends s.Scene {
       this.load.image("sliderBar", "assets/sliderBar.png"),
       this.load.image("square04_001", "assets/square04_001.png"),
       this.load.image("GJ_square02", "assets/GJ_square02.png"),
-      this.load.text("level_1", "assets/1.txt"),
-      this.load.audio("stereo_madness", "assets/StereoMadness.mp3"),
+      this.load.text("level_1", levelTextPath),
+      this.load.audio("stereo_madness", musicPath),
       this.load.audio("explode_11", "assets/explode_11.ogg"),
       this.load.audio("endStart_02", "assets/endStart_02.ogg"),
       this.load.audio("playSound_01", "assets/playSound_01.ogg"),
@@ -266,6 +457,7 @@ class BootScene extends s.Scene {
   }
   create() {
     this.cache.text.get("level_1");
+    buildAtlasFromPlist(this, "PlayerBallIcon", "PlayerBallIconRaw", "PlayerBallIconPlist");
     const bigFontMetadata = this.cache.text.get("bigFontFnt");
     bigFontMetadata && loadBitmapFontFromFnt(this, "bigFont", bigFontMetadata);
     const goldFontMetadata = this.cache.text.get("goldFontFnt");
@@ -284,6 +476,7 @@ class PlayerState {
       (this.lastY = 30),
       (this.lastGroundPosY = 30),
       (this.yVelocity = 0),
+      (this.mode = q),
       (this.onGround = !0),
       (this.canJump = !0),
       (this.isJumping = !1),
@@ -298,8 +491,13 @@ class PlayerState {
       (this.isDead = !1);
   }
 }
+
+function decodeStartPositionMode(gameModeValue) {
+  return 1 === gameModeValue ? H : 2 === gameModeValue ? j : q;
+}
 // Atlas search order used when frame names are reused across multiple sheets.
 const ATLAS_SEARCH_ORDER = [
+  "PlayerBallIcon",
   "GJ_WebSheet",
   "GJ_GameSheet",
   "GJ_GameSheet02",

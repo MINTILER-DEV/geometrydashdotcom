@@ -123,7 +123,7 @@ const vs = {
       frame: "portal_07_front_001.png",
       gridW: 1,
       gridH: 3,
-      sub: "fly",
+      sub: "ball",
     },
     200: {
       type: G,
