@@ -28,8 +28,16 @@ class GameScene extends s.Scene {
         _v: -l,
       }),
       (this._state = new PlayerState()),
+      (this._dualState = new PlayerState()),
       (this._level = new LevelRuntime(this, this._cameraXRef)),
       (this._player = new PlayerRuntime(this, this._state, this._level)),
+      (this._dualPlayer = new PlayerRuntime(
+        this,
+        this._dualState,
+        this._level,
+        !0,
+      )),
+      (this._dualActive = !1),
       (this._colorManager = new ColorManager()),
       (this._audio = new AudioManager(this));
     let levelData = this.cache.text.get("level_1");
@@ -37,6 +45,11 @@ class GameScene extends s.Scene {
     let levelSettings = decodeLevelData(levelData).settings,
       backgroundColor = { r: 0, g: 102, b: 255 },
       groundColor = { r: 0, g: 68, b: 170 };
+    this._levelSettings = levelSettings;
+    this._initialPlayerStartState = {
+      mode: decodeStartPositionMode(parseInt(levelSettings.kA2 || "0", 10)),
+      gravityFlipped: "1" === String(levelSettings.kA11 || "0"),
+    };
     // Geometry Dash stores color channels in the serialized kS38 string.
     levelSettings.kS38 &&
       levelSettings.kS38.split("|").forEach((entry) => {
@@ -102,6 +115,13 @@ class GameScene extends s.Scene {
       this._player.setCubeVisible(!1),
       this._player.setShipVisible(!1),
       this._player.setBallVisible(!1),
+      this._player.setBirdVisible(!1),
+      this._player.setDartVisible(!1),
+      this._dualPlayer.setCubeVisible(!1),
+      this._dualPlayer.setShipVisible(!1),
+      this._dualPlayer.setBallVisible(!1),
+      this._dualPlayer.setBirdVisible(!1),
+      this._dualPlayer.setDartVisible(!1),
       (this._debugGraphics = this.add.graphics().setDepth(99)),
       (this._logo = this.add
         .image(0, 100, "GJ_WebSheet", "GJ_logo_001.png")
@@ -1136,12 +1156,93 @@ class GameScene extends s.Scene {
       (this._playerWorldX = this._cameraX),
       (this._state.y = 30),
       (this._state.onGround = !0),
+      (this._state.isMini = !1),
+      (this._state.speedMultiplier = Ns),
       this._level.additiveContainer.setVisible(!0),
       this._level.container.setVisible(!0),
       this._level.topContainer.setVisible(!0),
+      this.setDualMode(!1),
       this._player.reset(),
+      this._applySpawnState(this._initialPlayerStartState),
       this._attemptsLabel.setVisible(this._attempts > 1),
       this._positionAttemptsLabel();
+  }
+  _applySpawnState(t, e = this._player, i = this._state) {
+    const s = t || this._initialPlayerStartState || { mode: q, gravityFlipped: !1 };
+    H === s.mode
+      ? e.enterShipMode()
+      : j === s.mode
+        ? e.enterBallMode()
+        : ne === s.mode
+          ? e.enterBirdMode()
+          : oe === s.mode
+            ? e.enterDartMode()
+            : e.enterCubeMode(),
+      (i.gravityFlipped = !!s.gravityFlipped),
+      (i.onGround = !0),
+      (i.onCeiling = !1),
+      (i.canJump = !0),
+      (i.yVelocity = 0),
+      (i.isMini = !1),
+      (i.speedMultiplier = Ns);
+  }
+  setDualMode(t, e = this._player) {
+    if (!t) {
+      if (e === this._dualPlayer && this._dualActive) {
+        const t = this._dualState;
+        (this._state.y = t.y),
+          (this._state.lastY = t.lastY),
+          (this._state.yVelocity = t.yVelocity),
+          (this._state.gravityFlipped = t.gravityFlipped),
+          (this._state.isMini = t.isMini),
+          (this._state.speedMultiplier = t.speedMultiplier),
+          this._applySpawnState(
+            { mode: t.mode, gravityFlipped: t.gravityFlipped },
+            this._player,
+            this._state,
+          ),
+          (this._state.y = t.y),
+          (this._state.lastY = t.lastY),
+          (this._state.yVelocity = t.yVelocity),
+          (this._state.isMini = t.isMini),
+          (this._state.speedMultiplier = t.speedMultiplier);
+      }
+      return (
+        (this._dualActive = !1),
+        (this._state.dualActive = !1),
+        this._dualState.reset(),
+        this._dualPlayer.reset(),
+        this._dualPlayer.setCubeVisible(!1),
+        this._dualPlayer.setShipVisible(!1),
+        this._dualPlayer.setBallVisible(!1),
+        this._dualPlayer.setBirdVisible(!1),
+        void this._dualPlayer.setDartVisible(!1)
+      );
+    }
+    const i = e ? e.p : this._state,
+      s = this._level.getFloorY(),
+      r = this._level.getCeilingY(),
+      n = null === r ? s + 600 : r,
+      a = (s + n) / 2,
+      o = a - (i.y - a);
+    this._dualState.reset(),
+      this._dualPlayer.reset(),
+      this._applySpawnState(
+        { mode: i.mode, gravityFlipped: !i.gravityFlipped },
+        this._dualPlayer,
+        this._dualState,
+      ),
+      (this._dualState.y = o),
+      (this._dualState.lastY = o),
+      (this._dualState.yVelocity = -i.yVelocity),
+      (this._dualState.isMini = i.isMini),
+      (this._dualState.speedMultiplier = i.speedMultiplier),
+      (this._dualState.onGround = !1),
+      (this._dualState.onCeiling = !1),
+      (this._dualState.canJump = i.canJump),
+      (this._dualActive = !0),
+      (this._state.dualActive = !0),
+      (this._dualState.dualActive = !0);
   }
   _pushButton() {
     if (this._menuActive)
@@ -1153,12 +1254,17 @@ class GameScene extends s.Scene {
       this._state.isDead ||
       ((this._state.upKeyDown = !0),
       (this._state.upKeyPressed = !0),
+      this._dualActive &&
+        ((this._dualState.upKeyDown = !0), (this._dualState.upKeyPressed = !0)),
       !this._state.isFlying &&
         this._state.canJump &&
         (this._player.updateJump(0), this._totalJumps++));
   }
   _releaseButton() {
-    (this._state.upKeyDown = !1), (this._state.upKeyPressed = !1);
+    (this._state.upKeyDown = !1),
+      (this._state.upKeyPressed = !1),
+      this._dualActive &&
+        ((this._dualState.upKeyDown = !1), (this._dualState.upKeyPressed = !1));
   }
   _positionMenuItems() {
     const t = n / 2;
@@ -1215,6 +1321,8 @@ class GameScene extends s.Scene {
     const t = this._cameraX;
     this._resetGameplayState(),
       this._state.reset(),
+      this._dualState.reset(),
+      this.setDualMode(!1),
       this._player.reset(),
       this._glitterEmitter.stop(),
       this._level.resetObjects(),
@@ -1230,15 +1338,10 @@ class GameScene extends s.Scene {
       const t = e[this._startPosIndex];
       (this._playerWorldX = t.x),
         (this._state.y = t.y),
-        H === t.mode
-          ? this._player.enterShipMode()
-          : j === t.mode
-            ? this._player.enterBallMode()
-            : this._player.enterCubeMode(),
-        (this._state.gravityFlipped = t.gravityFlipped),
+        this._applySpawnState(t),
         this._level.fastForwardTriggers(t.x, this._colorManager),
         (i = t.x / 623.16);
-    }
+    } else this._applySpawnState(this._initialPlayerStartState);
     this._audio.reset(),
       this._audio.startMusic(i),
       (this._paused = !1),
@@ -1285,7 +1388,9 @@ class GameScene extends s.Scene {
         this._level.updateVisibility(this._cameraX),
         this._level.applyEnterEffects(this._cameraX);
       const e = this._playerWorldX - this._cameraX;
-      this._player.syncSprites(this._cameraX, this._cameraY, 0, e);
+      this._player.syncSprites(this._cameraX, this._cameraY, 0, e),
+        this._dualActive &&
+          this._dualPlayer.syncSprites(this._cameraX, this._cameraY, 0, e);
     }
   }
   _updateBackground() {
@@ -1436,6 +1541,9 @@ class GameScene extends s.Scene {
         this._state.upKeyDown ||
         this._state.isDead ||
         (this._state.upKeyDown = !0),
+      this._dualActive &&
+        ((this._dualState.upKeyDown = this._state.upKeyDown),
+        this._dualState.upKeyPressed = this._state.upKeyPressed),
       this._level.updateEndPortalY(this._cameraY, this._state.isFlying),
       !this._levelWon && !this._state.isDead && this._level.endXPos > 0)
     ) {
@@ -1502,19 +1610,47 @@ class GameScene extends s.Scene {
     physicsSteps > 60 && (physicsSteps = 60);
     let stepDistance = physicsSteps > 0 ? quantizedDelta / physicsSteps : 0,
       physicsStep = stepDistance * p;
+    let movementSpeed = d * p * (this._state.speedMultiplier || Ns);
     const previousY = this._state.y;
+    const previousDualY = this._dualState.y;
     for (let stepIndex = 0; stepIndex < physicsSteps; stepIndex++)
       (this._state.lastY = this._state.y),
         this._player.updateJump(physicsStep),
         (this._state.y += this._state.yVelocity * physicsStep),
         this._player.checkCollisions(this._playerWorldX - l),
-        (this._playerWorldX += stepDistance * d * p),
+        this._dualActive &&
+          ((this._dualState.lastY = this._dualState.y),
+          this._dualPlayer.updateJump(physicsStep),
+          (this._dualState.y += this._dualState.yVelocity * physicsStep),
+          this._dualPlayer.checkCollisions(this._playerWorldX - l),
+          (this._dualState.upKeyPressed = !1),
+          (this._state.speedMultiplier = this._dualState.speedMultiplier =
+            Math.max(
+              this._state.speedMultiplier || Ns,
+              this._dualState.speedMultiplier || Ns,
+            )),
+          (movementSpeed = d * p * (this._state.speedMultiplier || Ns)),
+          (this._state.isDead || this._dualState.isDead) &&
+            (!this._state.isDead && this._player.killPlayer(),
+            !this._dualState.isDead && this._dualPlayer.killPlayer())),
+        (this._playerWorldX += stepDistance * movementSpeed),
         this._state.isFlying ||
           (this._state.onGround
             ? this._player.updateGroundRotation(physicsStep)
             : this._player.rotateActionActive &&
-              this._player.updateRotateAction(c));
-    if (((this._state.lastY = previousY), !this._endCameraOverride)) {
+              this._player.updateRotateAction(c)),
+        this._dualActive &&
+          (this._dualState.isFlying
+            ? this._dualPlayer.updateShipRotation(physicsStep)
+            : this._dualState.onGround
+              ? this._dualPlayer.updateGroundRotation(physicsStep)
+              : this._dualPlayer.rotateActionActive &&
+                this._dualPlayer.updateRotateAction(c));
+    if (
+      ((this._state.lastY = previousY),
+      this._dualActive && (this._dualState.lastY = previousDualY),
+      !this._endCameraOverride)
+    ) {
       const t = this._playerWorldX - l;
       if (this._level.endXPos > 0) {
         const e = this._level.endXPos - n;
@@ -1567,6 +1703,7 @@ class GameScene extends s.Scene {
     this._colorManager.step(e / 1e3),
       this._bg.setTint(this._colorManager.getHex(bs)),
       this._level.setGroundColor(this._colorManager.getHex(Ss)),
+      this._level.applyObjectColors(this._colorManager),
       this._level.updateVisibility(this._cameraX),
       this._level.checkEnterEffectTriggers(playerTriggerX),
       this._level.applyEnterEffects(this._cameraX),
@@ -1583,6 +1720,18 @@ class GameScene extends s.Scene {
       e / 1e3,
       playerScreenX,
     );
+    this._dualActive
+      ? this._dualPlayer.syncSprites(
+          this._cameraX,
+          this._cameraY,
+          e / 1e3,
+          playerScreenX,
+        )
+      : (this._dualPlayer.setCubeVisible(!1),
+        this._dualPlayer.setShipVisible(!1),
+        this._dualPlayer.setBallVisible(!1),
+        this._dualPlayer.setBirdVisible(!1),
+        this._dualPlayer.setDartVisible(!1));
     this._renderDebugHitboxes();
   }
   _renderDebugHitboxes() {

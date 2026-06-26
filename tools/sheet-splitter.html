@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Atlas Splitter</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --panel: #181c26;
+      --panel-2: #222838;
+      --border: #32405f;
+      --text: #edf3ff;
+      --muted: #9bb0d4;
+      --accent: #67d7ff;
+      --accent-2: #ffc857;
+      --danger: #ff6b6b;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(103, 215, 255, 0.12), transparent 28%),
+        linear-gradient(180deg, #0d1017 0%, #0b0d13 100%);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      min-height: 100vh;
+    }
+
+    .page {
+      width: min(1500px, calc(100vw - 32px));
+      margin: 24px auto 48px;
+    }
+
+    .hero {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 24px;
+      margin-bottom: 20px;
+    }
+
+    .hero h1 {
+      margin: 0 0 6px;
+      font-size: clamp(28px, 4vw, 42px);
+      letter-spacing: 0.03em;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 800px;
+      line-height: 1.45;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .panel {
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+    }
+
+    .panel h2,
+    .panel h3 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+    }
+
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    label {
+      font-size: 13px;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    input[type="file"],
+    input[type="search"],
+    select {
+      width: 100%;
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.12s ease, opacity 0.12s ease, filter 0.12s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.04);
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, var(--accent), #4db0ff);
+      color: #08111d;
+    }
+
+    .secondary {
+      background: linear-gradient(135deg, #ffd36f, var(--accent-2));
+      color: #241400;
+    }
+
+    .ghost {
+      background: #263149;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .status {
+      min-height: 20px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    .status.ok {
+      color: #8ff0a4;
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .meta .card {
+      background: rgba(0, 0, 0, 0.22);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+    }
+
+    .meta .label {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 5px;
+    }
+
+    .meta .value {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+    }
+
+    .sprite-card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 240px;
+    }
+
+    .sprite-preview {
+      min-height: 148px;
+      display: grid;
+      place-items: center;
+      padding: 14px;
+      background:
+        linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.04) 75%),
+        linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.04) 75%);
+      background-size: 18px 18px;
+      background-position: 0 0, 9px 9px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sprite-preview canvas {
+      image-rendering: pixelated;
+      max-width: 100%;
+      max-height: 120px;
+      filter: drop-shadow(0 8px 12px rgba(0,0,0,0.35));
+    }
+
+    .sprite-body {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      height: 100%;
+    }
+
+    .sprite-name {
+      font-size: 13px;
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    .sprite-meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .sprite-actions {
+      margin-top: auto;
+      display: flex;
+      gap: 8px;
+    }
+
+    .sprite-actions button {
+      flex: 1;
+      padding: 9px 10px;
+      font-size: 12px;
+    }
+
+    .empty {
+      padding: 30px;
+      border: 1px dashed var(--border);
+      border-radius: 16px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    @media (max-width: 1100px) {
+      .controls,
+      .meta {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 700px) {
+      .hero,
+      .controls,
+      .meta {
+        grid-template-columns: 1fr;
+        display: grid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="hero">
+      <div>
+        <h1>Atlas Splitter</h1>
+        <p>
+          Load any sprite sheet PNG and matching atlas JSON, inspect frame names visually,
+          search IDs fast, and export individual reconstructed sprites as a zip.
+        </p>
+      </div>
+      <a href="/" style="color: var(--accent); text-decoration: none; font-weight: 700;">Back To Site</a>
+    </div>
+
+    <div class="controls">
+      <div class="panel">
+        <h2>Assets</h2>
+        <div class="stack">
+          <div>
+            <label for="pngInput">Sheet PNG</label>
+            <input id="pngInput" type="file" accept=".png,image/png" />
+          </div>
+          <div>
+            <label for="jsonInput">Atlas JSON</label>
+            <input id="jsonInput" type="file" accept=".json,application/json" />
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Browse</h2>
+        <div class="stack">
+          <div>
+            <label for="searchInput">Search Frames</label>
+            <input id="searchInput" type="search" placeholder="square_b, 94, plank..." />
+          </div>
+          <div>
+            <label for="scaleSelect">Preview Scale</label>
+            <select id="scaleSelect">
+              <option value="1">1x</option>
+              <option value="2" selected>2x</option>
+              <option value="3">3x</option>
+              <option value="4">4x</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Export</h2>
+        <div class="stack">
+          <button id="downloadVisibleZipButton" class="primary" disabled>Download Visible Zip</button>
+          <button id="downloadAllZipButton" class="secondary" disabled>Download Full Zip</button>
+          <button id="loadOfficialButton" class="ghost">Load Current GJ_GameSheet</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Status</h2>
+        <div id="statusMessage" class="status">Waiting for atlas files.</div>
+      </div>
+    </div>
+
+    <div class="meta">
+      <div class="card">
+        <div class="label">Atlas</div>
+        <div id="atlasName" class="value">None</div>
+      </div>
+      <div class="card">
+        <div class="label">Frames</div>
+        <div id="frameCount" class="value">0</div>
+      </div>
+      <div class="card">
+        <div class="label">Visible</div>
+        <div id="visibleCount" class="value">0</div>
+      </div>
+      <div class="card">
+        <div class="label">Image Size</div>
+        <div id="imageSize" class="value">0 x 0</div>
+      </div>
+    </div>
+
+    <div id="sheetGrid" class="grid"></div>
+    <div id="emptyState" class="empty">Load a PNG and JSON atlas to start browsing frames.</div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script>
+    const pngInput = document.getElementById("pngInput");
+    const jsonInput = document.getElementById("jsonInput");
+    const searchInput = document.getElementById("searchInput");
+    const scaleSelect = document.getElementById("scaleSelect");
+    const statusMessage = document.getElementById("statusMessage");
+    const frameCount = document.getElementById("frameCount");
+    const visibleCount = document.getElementById("visibleCount");
+    const atlasName = document.getElementById("atlasName");
+    const imageSize = document.getElementById("imageSize");
+    const sheetGrid = document.getElementById("sheetGrid");
+    const emptyState = document.getElementById("emptyState");
+    const downloadVisibleZipButton = document.getElementById("downloadVisibleZipButton");
+    const downloadAllZipButton = document.getElementById("downloadAllZipButton");
+    const loadOfficialButton = document.getElementById("loadOfficialButton");
+
+    const atlasState = {
+      image: null,
+      atlasName: "",
+      frames: [],
+      filteredFrames: [],
+      previewScale: 2,
+    };
+
+    function setStatus(message, type = "") {
+      statusMessage.textContent = message;
+      statusMessage.className = type ? `status ${type}` : "status";
+    }
+
+    function normalizeFrames(json) {
+      if (json.frames && !Array.isArray(json.frames)) {
+        return Object.entries(json.frames).map(([name, frameData]) => ({
+          name,
+          ...frameData,
+        }));
+      }
+      if (Array.isArray(json.frames)) {
+        return json.frames.map((frameData) => ({
+          name: frameData.filename || frameData.name,
+          ...frameData,
+        }));
+      }
+      if (Array.isArray(json.textures) && json.textures[0] && Array.isArray(json.textures[0].frames)) {
+        return json.textures[0].frames.map((frameData) => ({
+          name: frameData.filename || frameData.name,
+          ...frameData,
+        }));
+      }
+      throw new Error("Unsupported atlas JSON format.");
+    }
+
+    function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsText(file);
+      });
+    }
+
+    function readFileAsImage(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.onerror = reject;
+          image.src = reader.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function parseFrameRect(frameData) {
+      return frameData.frame || frameData;
+    }
+
+    function parseSourceSize(frameData, frameRect) {
+      return frameData.sourceSize || {
+        w: frameRect.w,
+        h: frameRect.h,
+      };
+    }
+
+    function parseSpriteSourceSize(frameData, frameRect) {
+      return frameData.spriteSourceSize || {
+        x: 0,
+        y: 0,
+        w: frameRect.w,
+        h: frameRect.h,
+      };
+    }
+
+    function createFrameCanvas(frameData) {
+      const frameRect = parseFrameRect(frameData);
+      const sourceSize = parseSourceSize(frameData, frameRect);
+      const spriteSourceSize = parseSpriteSourceSize(frameData, frameRect);
+      const outputCanvas = document.createElement("canvas");
+      const outputContext = outputCanvas.getContext("2d");
+      outputCanvas.width = Math.max(1, sourceSize.w || frameRect.w);
+      outputCanvas.height = Math.max(1, sourceSize.h || frameRect.h);
+      outputContext.imageSmoothingEnabled = false;
+
+      if (frameData.rotated) {
+        const rotatedCanvas = document.createElement("canvas");
+        const rotatedContext = rotatedCanvas.getContext("2d");
+        rotatedCanvas.width = frameRect.h;
+        rotatedCanvas.height = frameRect.w;
+        rotatedContext.save();
+        rotatedContext.translate(rotatedCanvas.width / 2, rotatedCanvas.height / 2);
+        rotatedContext.rotate(Math.PI / 2);
+        rotatedContext.drawImage(
+          atlasState.image,
+          frameRect.x,
+          frameRect.y,
+          frameRect.w,
+          frameRect.h,
+          -frameRect.w / 2,
+          -frameRect.h / 2,
+          frameRect.w,
+          frameRect.h,
+        );
+        rotatedContext.restore();
+        outputContext.drawImage(
+          rotatedCanvas,
+          0,
+          0,
+          rotatedCanvas.width,
+          rotatedCanvas.height,
+          spriteSourceSize.x || 0,
+          spriteSourceSize.y || 0,
+          spriteSourceSize.w || rotatedCanvas.width,
+          spriteSourceSize.h || rotatedCanvas.height,
+        );
+      } else {
+        outputContext.drawImage(
+          atlasState.image,
+          frameRect.x,
+          frameRect.y,
+          frameRect.w,
+          frameRect.h,
+          spriteSourceSize.x || 0,
+          spriteSourceSize.y || 0,
+          spriteSourceSize.w || frameRect.w,
+          spriteSourceSize.h || frameRect.h,
+        );
+      }
+
+      return outputCanvas;
+    }
+
+    function downloadBlob(filename, blob) {
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    }
+
+    function canvasToBlob(canvas) {
+      return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    }
+
+    function updateMeta() {
+      atlasName.textContent = atlasState.atlasName || "None";
+      frameCount.textContent = String(atlasState.frames.length);
+      visibleCount.textContent = String(atlasState.filteredFrames.length);
+      imageSize.textContent = atlasState.image
+        ? `${atlasState.image.width} x ${atlasState.image.height}`
+        : "0 x 0";
+      const hasFrames = atlasState.frames.length > 0 && atlasState.image;
+      downloadVisibleZipButton.disabled = !hasFrames || atlasState.filteredFrames.length === 0;
+      downloadAllZipButton.disabled = !hasFrames;
+    }
+
+    function renderGrid() {
+      sheetGrid.innerHTML = "";
+      emptyState.style.display = atlasState.filteredFrames.length ? "none" : "block";
+
+      for (const frameData of atlasState.filteredFrames) {
+        const card = document.createElement("article");
+        card.className = "sprite-card";
+
+        const preview = document.createElement("div");
+        preview.className = "sprite-preview";
+        const previewCanvas = createFrameCanvas(frameData);
+        const previewScale = Number(scaleSelect.value || atlasState.previewScale || 2);
+        previewCanvas.style.width = `${previewCanvas.width * previewScale}px`;
+        previewCanvas.style.height = `${previewCanvas.height * previewScale}px`;
+        preview.appendChild(previewCanvas);
+
+        const body = document.createElement("div");
+        body.className = "sprite-body";
+
+        const name = document.createElement("div");
+        name.className = "sprite-name";
+        name.textContent = frameData.name;
+
+        const frameRect = parseFrameRect(frameData);
+        const sourceSize = parseSourceSize(frameData, frameRect);
+        const meta = document.createElement("div");
+        meta.className = "sprite-meta";
+        meta.innerHTML =
+          `atlas: ${frameRect.x}, ${frameRect.y}, ${frameRect.w} x ${frameRect.h}<br>` +
+          `sprite: ${sourceSize.w} x ${sourceSize.h}` +
+          (frameData.rotated ? "<br>rotated: yes" : "");
+
+        const actions = document.createElement("div");
+        actions.className = "sprite-actions";
+
+        const downloadSpriteButton = document.createElement("button");
+        downloadSpriteButton.className = "ghost";
+        downloadSpriteButton.textContent = "PNG";
+        downloadSpriteButton.addEventListener("click", async () => {
+          const blob = await canvasToBlob(createFrameCanvas(frameData));
+          downloadBlob(frameData.name.replace(/\.png$/i, "") + ".png", blob);
+        });
+
+        const copyNameButton = document.createElement("button");
+        copyNameButton.className = "ghost";
+        copyNameButton.textContent = "Copy Name";
+        copyNameButton.addEventListener("click", async () => {
+          await navigator.clipboard.writeText(frameData.name);
+          setStatus(`Copied ${frameData.name}`, "ok");
+        });
+
+        actions.append(downloadSpriteButton, copyNameButton);
+        body.append(name, meta, actions);
+        card.append(preview, body);
+        sheetGrid.appendChild(card);
+      }
+
+      updateMeta();
+    }
+
+    function filterFrames() {
+      const query = searchInput.value.trim().toLowerCase();
+      atlasState.filteredFrames = atlasState.frames.filter((frameData) => {
+        if (!query) return true;
+        return frameData.name.toLowerCase().includes(query);
+      });
+      renderGrid();
+    }
+
+    async function loadAtlasFromFiles(imageFile, jsonFile) {
+      if (!imageFile || !jsonFile) return;
+      setStatus("Loading atlas files...");
+      try {
+        const [image, jsonText] = await Promise.all([
+          readFileAsImage(imageFile),
+          readFileAsText(jsonFile),
+        ]);
+        const parsedJson = JSON.parse(jsonText);
+        atlasState.image = image;
+        atlasState.atlasName = jsonFile.name.replace(/\.json$/i, "");
+        atlasState.frames = normalizeFrames(parsedJson)
+          .filter((frameData) => frameData.name)
+          .sort((left, right) => left.name.localeCompare(right.name));
+        atlasState.filteredFrames = atlasState.frames.slice();
+        setStatus(`Loaded ${atlasState.frames.length} frames from ${atlasState.atlasName}.`, "ok");
+        filterFrames();
+      } catch (error) {
+        console.error(error);
+        setStatus(error.message || "Failed to load atlas files.", "error");
+      }
+    }
+
+    async function addFramesToZip(zip, frames) {
+      for (const frameData of frames) {
+        const blob = await canvasToBlob(createFrameCanvas(frameData));
+        zip.file(frameData.name.replace(/\.png$/i, "") + ".png", blob);
+      }
+    }
+
+    async function downloadZip(frames, filename) {
+      if (!window.JSZip) {
+        setStatus("JSZip failed to load. Reload and try again.", "error");
+        return;
+      }
+      if (!frames.length) return;
+      setStatus(`Preparing ${frames.length} sprites for zip...`);
+      const zip = new JSZip();
+      await addFramesToZip(zip, frames);
+      const blob = await zip.generateAsync({ type: "blob" });
+      downloadBlob(filename, blob);
+      setStatus(`Downloaded ${filename}`, "ok");
+    }
+
+    async function loadOfficialGameSheet() {
+      setStatus("Loading official GJ_GameSheet atlas...");
+      try {
+        const [imageBlob, jsonText] = await Promise.all([
+          fetch("/geometrydashdotcom/game/assets/GJ_GameSheet.png").then((response) => {
+            if (!response.ok) throw new Error("Failed to fetch GJ_GameSheet.png");
+            return response.blob();
+          }),
+          fetch("/geometrydashdotcom/game/assets/GJ_GameSheet.json").then((response) => {
+            if (!response.ok) throw new Error("Failed to fetch GJ_GameSheet.json");
+            return response.text();
+          }),
+        ]);
+        const image = await readFileAsImage(new File([imageBlob], "GJ_GameSheet.png", { type: "image/png" }));
+        atlasState.image = image;
+        atlasState.atlasName = "GJ_GameSheet";
+        atlasState.frames = normalizeFrames(JSON.parse(jsonText))
+          .filter((frameData) => frameData.name)
+          .sort((left, right) => left.name.localeCompare(right.name));
+        atlasState.filteredFrames = atlasState.frames.slice();
+        setStatus(`Loaded ${atlasState.frames.length} frames from GJ_GameSheet.`, "ok");
+        filterFrames();
+      } catch (error) {
+        console.error(error);
+        setStatus(error.message || "Failed to load official atlas.", "error");
+      }
+    }
+
+    pngInput.addEventListener("change", () => loadAtlasFromFiles(pngInput.files[0], jsonInput.files[0]));
+    jsonInput.addEventListener("change", () => loadAtlasFromFiles(pngInput.files[0], jsonInput.files[0]));
+    searchInput.addEventListener("input", filterFrames);
+    scaleSelect.addEventListener("change", () => {
+      atlasState.previewScale = Number(scaleSelect.value || 2);
+      renderGrid();
+    });
+    downloadVisibleZipButton.addEventListener("click", () => downloadZip(
+      atlasState.filteredFrames,
+      `${atlasState.atlasName || "atlas"}-visible.zip`,
+    ));
+    downloadAllZipButton.addEventListener("click", () => downloadZip(
+      atlasState.frames,
+      `${atlasState.atlasName || "atlas"}-all.zip`,
+    ));
+    loadOfficialButton.addEventListener("click", loadOfficialGameSheet);
+
+    updateMeta();
+  </script>
+</body>
+</html>

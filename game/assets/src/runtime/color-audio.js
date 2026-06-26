@@ -82,6 +82,7 @@ class AudioManager {
     return 0.8 * this._userMusicVol;
   }
   startMusic(t = 0) {
+    if (!this._scene.cache.audio.exists("stereo_madness")) return;
     this._music && (this._music.stop(), this._music.destroy()),
       (this._music = this._scene.sound.add("stereo_madness", {
         loop: !0,
@@ -114,6 +115,7 @@ class AudioManager {
     this.setUserMusicVolume(t / 0.8);
   }
   fadeInMusic(t = 1e3) {
+    if (!this._scene.cache.audio.exists("stereo_madness")) return;
     this._music && (this._music.stop(), this._music.destroy()),
       (this._music = this._scene.sound.add("stereo_madness", {
         loop: !0,

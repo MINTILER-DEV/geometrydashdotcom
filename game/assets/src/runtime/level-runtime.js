@@ -35,6 +35,7 @@ class LevelRuntime {
       (this._sectionContainers = []),
       (this._collisionSections = []),
       (this._nearbyBuffer = []),
+      (this._dynamicColorSprites = []),
       (this._visMinSec = -1),
       (this._visMaxSec = -1),
       (this._groundStartScreenY = gameYToScreenY(0)),
@@ -56,6 +57,70 @@ class LevelRuntime {
   loadLevel(t) {
     let { objects: e } = decodeLevelData(t);
     this._spawnLevelObjects(e);
+  }
+  _getRotatedAabbSize(width, height, rotationDegrees) {
+    const radians = (((rotationDegrees || 0) % 360) * Math.PI) / 180,
+      cos = Math.abs(Math.cos(radians)),
+      sin = Math.abs(Math.sin(radians));
+    return {
+      width: width * cos + height * sin,
+      height: width * sin + height * cos,
+    };
+  }
+  _getSlopeHitboxKind(frameName) {
+    if (!frameName || /slope_square/.test(frameName) || !/slope_/.test(frameName)) return null;
+    if (/slope_0?1[a-z]?/.test(frameName)) return "ascending";
+    if (/slope_0?2[a-z]?/.test(frameName)) return "descending";
+    return null;
+  }
+  _getSolidHitboxOverride(
+    levelObject,
+    objectDefinition,
+    defaultCenterX,
+    defaultCenterY,
+    defaultWidth,
+    defaultHeight
+  ) {
+    if ("line_top" === objectDefinition.hitboxType) {
+      const normalizedRotation = ((levelObject.rot % 360) + 360) % 360,
+        lineThickness = 2;
+      if (90 === normalizedRotation || 270 === normalizedRotation)
+        return {
+          width: lineThickness,
+          height: defaultHeight,
+          x:
+            defaultCenterX +
+            (90 === normalizedRotation
+              ? defaultWidth / 2 - lineThickness / 2
+              : -defaultWidth / 2 + lineThickness / 2),
+          y: defaultCenterY,
+        };
+      return {
+        width: defaultWidth,
+        height: lineThickness,
+        x: defaultCenterX,
+        y:
+          defaultCenterY +
+          (180 === normalizedRotation
+            ? -defaultHeight / 2 + lineThickness / 2
+            : defaultHeight / 2 - lineThickness / 2),
+      };
+    }
+    if (
+      Number(window.levelId) !== -12 ||
+      objectDefinition.type !== R ||
+      ![65, 66, 68].includes(levelObject.id) ||
+      levelObject.x < 480 ||
+      levelObject.x > 740
+    )
+      return null;
+    return {
+      width: defaultWidth,
+      height: 2,
+      // Theory of Everything opens with a few raised solids that behave more like
+      // a thin top line than a full 1x1 block in the original game.
+      y: levelObject.y + defaultHeight * 1.125,
+    };
   }
   _buildGround() {
     const t = this._scene,
@@ -339,6 +404,15 @@ class LevelRuntime {
       1 !== s.scale && e.setScale(s.scale),
       r && (void 0 !== r.tint ? e.setTint(r.tint) : r.black && e.setTint(0));
   }
+  _bindObjectTint(t, e, i = 1) {
+    if (!t || !e) return;
+    const s = 1 === i ? e.color1 : e.color2;
+    s > 0 && ((t._gdColorIndex = s), this._dynamicColorSprites.push(t));
+  }
+  applyObjectColors(t) {
+    for (const e of this._dynamicColorSprites)
+      e && e.scene && e._gdColorIndex > 0 && e.setTint(t.getHex(e._gdColorIndex));
+  }
   _addVisualSprite(t, e = null) {
     t &&
       (e && "additive" === e.blend
@@ -405,7 +479,7 @@ class LevelRuntime {
           x: 2 * r.x,
           y: 2 * r.y,
           mode: decodeStartPositionMode(r.gameMode),
-          isFlying: 1 === r.gameMode,
+          isFlying: 1 === r.gameMode || 3 === r.gameMode || 4 === r.gameMode,
           gravityFlipped: r.flipGravity,
         });
       }
@@ -440,6 +514,7 @@ class LevelRuntime {
         if (
           (c &&
             (this._applyVisualProps(e, c, h, r, t),
+            this._bindObjectTint(c, r, 1),
             this._addVisualSprite(c, u),
             (c._eeWorldX = n),
             (c._eeBaseY = s),
@@ -450,6 +525,7 @@ class LevelRuntime {
             a = findTextureFrame(e, t) ? createTextureImage(e, i, s, t) : null;
           a &&
             (this._applyVisualProps(e, a, t, r),
+            this._bindObjectTint(a, r, 2),
             this._addVisualSprite(a),
             (a._eeWorldX = n),
             (a._eeBaseY = s),
@@ -473,6 +549,9 @@ class LevelRuntime {
             let h = createTextureImage(e, i + t, s + o, a.frame);
             h &&
               (this._applyVisualProps(e, h, a.frame, r, a),
+              0 === a.tint
+                ? this._bindObjectTint(h, r, 1)
+                : 1 === a.tint && this._bindObjectTint(h, r, 2),
               a.audioScale &&
                 (h.setScale(0.1),
                 h.setAlpha(0.9),
@@ -531,76 +610,125 @@ class LevelRuntime {
           this._addToSection(v);
       }
       if (t) {
-        let e = parseInt(r.rot || 0);
+        let e = parseFloat(r.rot || 0),
+          i = Math.abs(r.scale || 1);
         if (t.type === R && t.gridW > 0 && t.gridH > 0) {
-          let e = t.gridW * o,
-            i = t.gridH * o,
-            s = new LevelHitbox(m, n, a, e, i);
-          this.objects.push(s), this._addCollisionToSection(s);
+          let s = t.gridW * o * i,
+            h = t.gridH * o * i,
+            u = n,
+            c = a;
+          const baseSolidWidth = s,
+            baseSolidHeight = h;
+          const solidHitboxOverride = this._getSolidHitboxOverride(r, t, u, c, s, h);
+          solidHitboxOverride &&
+            ((s = solidHitboxOverride.width),
+            (h = solidHitboxOverride.height),
+            (u = void 0 !== solidHitboxOverride.x ? solidHitboxOverride.x : n),
+            (c = void 0 !== solidHitboxOverride.y ? solidHitboxOverride.y : a));
+          solidHitboxOverride ||
+            (({ width: s, height: h } = this._getRotatedAabbSize(s, h, e)));
+          let d = new LevelHitbox(m, u, c, s, h);
+          (d.rot = e),
+            (d.scale = i),
+            (d.baseWidth = baseSolidWidth),
+            (d.baseHeight = baseSolidHeight),
+            (d.slopeKind = this._getSlopeHitboxKind(t.frame)),
+            (d.baseFrame = t.frame),
+            this.objects.push(d),
+            this._addCollisionToSection(d);
         } else if (t.type === L) {
-          let e = 0,
-            i = 0;
+          let s = 0,
+            h = 0;
           if (
             (t.spriteW > 0 &&
             t.spriteH > 0 &&
             void 0 !== t.hitboxScaleX &&
             void 0 !== t.hitboxScaleY
-              ? ((e = t.spriteW * t.hitboxScaleX * 2),
-                (i = t.spriteH * t.hitboxScaleY * 2))
+              ? ((s = t.spriteW * t.hitboxScaleX * 2 * i),
+                (h = t.spriteH * t.hitboxScaleY * 2 * i))
               : t.gridW > 0 &&
                 t.gridH > 0 &&
-                ((e = 12 * t.gridW), (i = 24 * t.gridH)),
-            e > 0 && i > 0)
+                ((s = 12 * t.gridW * i), (h = 24 * t.gridH * i)),
+            s > 0 && h > 0)
           ) {
-            let t = new LevelHitbox(y, n, a, e, i);
-            this.objects.push(t), this._addCollisionToSection(t);
+            ({ width: s, height: h } = this._getRotatedAabbSize(s, h, e));
+            let t = new LevelHitbox(y, n, a, s, h);
+            (t.rot = e), (t.scale = i), this.objects.push(t), this._addCollisionToSection(t);
           }
-        } else if (t.type === F) {
-          let i = 90,
-            s = t.gridH * o,
+        } else if (t.type === F || t.type === G) {
+          let s = 90 * i,
+            h = t.gridH * o * i,
             r = null;
-          if (90 === e || 270 === e || -90 === e || -270 === e) {
-            let t = i;
-            (i = s), (s = t);
-          }
           if (
-            ("fly" === t.sub
+            (t.type === G
+              ? "slow" === t.sub
+                ? (r = J)
+                : "fast" === t.sub
+                  ? (r = Z)
+                  : "extreme" === t.sub
+                    ? (r = tt)
+                  : "very_fast" === t.sub
+                    ? (r = $)
+                    : "normal" === t.sub && (r = Q)
+              : "fly" === t.sub
               ? (r = b)
+              : "bird" === t.sub
+                ? (r = re)
               : "cube" === t.sub
                 ? (r = S)
                 : "ball" === t.sub
                   ? (r = Y)
+                : "dart" === t.sub
+                  ? (r = se)
+                : "dual" === t.sub
+                  ? (r = ae)
                 : "flip" === t.sub
                   ? (r = E)
+                  : "big" === t.sub
+                    ? (r = K)
+                    : "mini" === t.sub
+                      ? (r = ee)
                   : "normal" === t.sub && (r = A),
             r)
           ) {
-            let t = new LevelHitbox(r, n, a, i, s);
+            ({ width: s, height: h } = this._getRotatedAabbSize(s, h, e));
+            let t = new LevelHitbox(r, n, a, s, h);
             (t.portalY = a),
               (t.rot = e),
+              (t.scale = i),
               this.objects.push(t),
               this._addCollisionToSection(t);
           }
         } else if (t.type === D && t.gridW > 0 && t.gridH > 0) {
-          let e = t.gridW * o,
-            i = t.gridH * o,
-            s = new LevelHitbox(x, n, a, e, i);
-          this.objects.push(s), this._addCollisionToSection(s);
+          let s = t.gridW * o * i,
+            h = t.gridH * o * i;
+          ({ width: s, height: h } = this._getRotatedAabbSize(s, h, e));
+          let u = new LevelHitbox(("pink" === t.sub ? V : x), n, a, s, h);
+          (u.rot = e), (u.scale = i),
+          this.objects.push(u), this._addCollisionToSection(u);
         } else if (t.type === k && t.gridW > 0 && t.gridH > 0) {
-          let e = t.gridW * o,
-            i = t.gridH * o,
-            s = new LevelHitbox(_, n, a, e, i);
-          this.objects.push(s), this._addCollisionToSection(s);
+          let s = t.gridW * o * i,
+            h = t.gridH * o * i;
+          ({ width: s, height: h } = this._getRotatedAabbSize(s, h, e));
+          let u = new LevelHitbox(("pink" === t.sub ? W : _), n, a, s, h);
+          (u.rot = e), (u.scale = i),
+          this.objects.push(u), this._addCollisionToSection(u);
         } else if (t.type === I && t.gridW > 0 && t.gridH > 0) {
-          let i = t.gridW * o,
-            s = t.gridH * o,
-            r = new LevelHitbox(w, n, a, i, s);
-          (r.rot = e), this.objects.push(r), this._addCollisionToSection(r);
+          let s = t.gridW * o * i,
+            h = t.gridH * o * i;
+          // Gravity pads need a more forgiving trigger strip so ceiling-facing chains
+          // still register after the player snaps onto the next surface.
+          h = Math.max(h, 24 * i);
+          ({ width: s, height: h } = this._getRotatedAabbSize(s, h, e));
+          let r = new LevelHitbox(w, n, a, s, h);
+          (r.rot = e), (r.scale = i), this.objects.push(r), this._addCollisionToSection(r);
         } else if (t.type === B && t.gridW > 0 && t.gridH > 0) {
-          let e = t.gridW * o,
-            i = t.gridH * o,
-            s = new LevelHitbox(T, n, a, e, i);
-          this.objects.push(s), this._addCollisionToSection(s);
+          let s = t.gridW * o * i,
+            h = t.gridH * o * i;
+          ({ width: s, height: h } = this._getRotatedAabbSize(s, h, e));
+          let u = new LevelHitbox(T, n, a, s, h);
+          (u.rot = e), (u.scale = i),
+          this.objects.push(u), this._addCollisionToSection(u);
         }
       }
     }

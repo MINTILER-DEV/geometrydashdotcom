@@ -12,10 +12,11 @@
     </style>
   <script>
     var levelId = Number(new URLSearchParams(location.search).get('id')) || 1;
+    var runtimeAssetVersion = '2026-04-22-ufo-slope-dual-hf-1';
     function loadScript(src) {
       return new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.src = src;
+        script.src = `${src}?v=${runtimeAssetVersion}`;
         script.async = false;
         script.onload = resolve;
         script.onerror = () => reject(new Error(`Failed to load ${src}`));
@@ -43,12 +44,23 @@
       });
     }
     async function start() {
-      if ('serviceWorker' in navigator) {
-        const registration = await navigator.serviceWorker.register('/geometrydashdotcom/worker.js');
+      if ('serviceWorker' in navigator && levelId >= 0) {
+        const registration = await navigator.serviceWorker.register(`/geometrydashdotcom/worker.js?v=${runtimeAssetVersion}`);
         await navigator.serviceWorker.ready;
         await waitForServiceWorkerControl();
         registration.active?.postMessage({ levelId });
         navigator.serviceWorker.controller?.postMessage({ levelId });
+      } else if ('serviceWorker' in navigator && levelId < 0) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const registration of registrations) {
+          const matchesGameWorker =
+            registration.active?.scriptURL?.includes('/geometrydashdotcom/worker.js') ||
+            registration.waiting?.scriptURL?.includes('/geometrydashdotcom/worker.js') ||
+            registration.installing?.scriptURL?.includes('/geometrydashdotcom/worker.js');
+          if (matchesGameWorker) {
+            await registration.unregister();
+          }
+        }
       }
 
       const runtimeScripts = [

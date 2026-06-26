@@ -56,7 +56,12 @@ function inflateLevelString(encodedLevelData) {
   for (let byteIndex = 0; byteIndex < binaryText.length; byteIndex++)
     compressedBytes[byteIndex] = binaryText.charCodeAt(byteIndex);
 
-  let inflatedBytes = window.pako.inflate(compressedBytes);
+  let inflatedBytes;
+  try {
+    inflatedBytes = window.pako.ungzip(compressedBytes);
+  } catch (gzipError) {
+    inflatedBytes = window.pako.inflate(compressedBytes);
+  }
   return new TextDecoder().decode(inflatedBytes);
 }
 

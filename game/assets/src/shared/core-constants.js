@@ -187,6 +187,11 @@ function buildAtlasFromPlist(scene, atlasKey, rawImageKey, plistCacheKey) {
 const FIXED_TIME_STEP_SECONDS = 1 / 240,
   BASE_PLAYER_SPEED = 11.540004,
   GAMEPLAY_SPEED_SCALE = 0.9,
+  SPEED_PORTAL_SLOW_MULTIPLIER = 0.8063492063492064,
+  SPEED_PORTAL_NORMAL_MULTIPLIER = 1,
+  SPEED_PORTAL_FAST_MULTIPLIER = 1.2434045830926247,
+  SPEED_PORTAL_VERY_FAST_MULTIPLIER = 1.5022135567109568,
+  SPEED_PORTAL_EXTREME_MULTIPLIER = 1.84589,
   BASE_GRAVITY_ACCELERATION = 1.916398,
   BALL_GRAVITY_ACCELERATION = 1.7,
   PRIMARY_GLOW_TINT = 65280,
@@ -194,17 +199,31 @@ const FIXED_TIME_STEP_SECONDS = 1 / 240,
   PLAYER_MODE_CUBE = "cube",
   PLAYER_MODE_SHIP = "ship",
   PLAYER_MODE_BALL = "ball",
+  PLAYER_MODE_BIRD = "bird",
+  PLAYER_MODE_DART = "dart",
   COLLISION_TYPE_SOLID = "solid",
   COLLISION_TYPE_HAZARD = "hazard",
   PAD_TYPE_YELLOW = "yellow_pad",
   RING_TYPE_YELLOW = "yellow_ring",
+  PAD_TYPE_PINK = "pink_pad",
+  RING_TYPE_PINK = "pink_ring",
   PAD_TYPE_BLUE = "blue_pad",
   RING_TYPE_BLUE = "blue_ring",
   PORTAL_MODE_SHIP = "portal_fly",
   PORTAL_MODE_CUBE = "portal_cube",
   PORTAL_MODE_BALL = "portal_ball",
+  PORTAL_MODE_BIRD = "portal_bird",
+  PORTAL_MODE_DART = "portal_dart",
+  PORTAL_MODE_DUAL = "portal_dual",
   PORTAL_MODE_FLIP = "portal_flip",
-  PORTAL_MODE_NORMAL = "portal_normal";
+  PORTAL_MODE_NORMAL = "portal_normal",
+  PORTAL_MODE_BIG = "portal_big",
+  PORTAL_MODE_MINI = "portal_mini",
+  PORTAL_SPEED_SLOW = "speed_slow",
+  PORTAL_SPEED_NORMAL = "speed_normal",
+  PORTAL_SPEED_FAST = "speed_fast",
+  PORTAL_SPEED_VERY_FAST = "speed_very_fast",
+  PORTAL_SPEED_EXTREME = "speed_extreme";
 
 function gameYToScreenY(gameY) {
   return 460 - gameY;
@@ -233,6 +252,11 @@ let l = PLAYER_SCREEN_OFFSET_X;
 const c = FIXED_TIME_STEP_SECONDS,
   d = BASE_PLAYER_SPEED,
   p = GAMEPLAY_SPEED_SCALE,
+  zs = SPEED_PORTAL_SLOW_MULTIPLIER,
+  Ns = SPEED_PORTAL_NORMAL_MULTIPLIER,
+  Cs = SPEED_PORTAL_FAST_MULTIPLIER,
+  ks = SPEED_PORTAL_VERY_FAST_MULTIPLIER,
+  Es = SPEED_PORTAL_EXTREME_MULTIPLIER,
   f = BASE_GRAVITY_ACCELERATION,
   U = BALL_GRAVITY_ACCELERATION,
   g = PRIMARY_GLOW_TINT,
@@ -240,17 +264,31 @@ const c = FIXED_TIME_STEP_SECONDS,
   q = PLAYER_MODE_CUBE,
   H = PLAYER_MODE_SHIP,
   j = PLAYER_MODE_BALL,
+  ne = PLAYER_MODE_BIRD,
+  oe = PLAYER_MODE_DART,
   m = COLLISION_TYPE_SOLID,
   y = COLLISION_TYPE_HAZARD,
   x = PAD_TYPE_YELLOW,
   _ = RING_TYPE_YELLOW,
+  V = PAD_TYPE_PINK,
+  W = RING_TYPE_PINK,
   w = PAD_TYPE_BLUE,
   T = RING_TYPE_BLUE,
   b = PORTAL_MODE_SHIP,
   S = PORTAL_MODE_CUBE,
   Y = PORTAL_MODE_BALL,
+  re = PORTAL_MODE_BIRD,
+  se = PORTAL_MODE_DART,
+  ae = PORTAL_MODE_DUAL,
   E = PORTAL_MODE_FLIP,
   A = PORTAL_MODE_NORMAL,
+  K = PORTAL_MODE_BIG,
+  ee = PORTAL_MODE_MINI,
+  J = PORTAL_SPEED_SLOW,
+  Q = PORTAL_SPEED_NORMAL,
+  Z = PORTAL_SPEED_FAST,
+  $ = PORTAL_SPEED_VERY_FAST,
+  tt = PORTAL_SPEED_EXTREME,
   R = OBJECT_GROUP_SOLID,
   L = OBJECT_GROUP_HAZARD,
   O = OBJECT_GROUP_DECORATION,
@@ -377,10 +415,7 @@ class BootScene extends s.Scene {
       }
       var customAdditiveBlendMode;
     })(this.game);
-    const officialLevelId =
-        "number" == typeof window.levelId && window.levelId < 0
-          ? window.levelId
-          : null,
+    const officialLevelId = resolveOfficialLevelId(),
       levelTextPath =
         null !== officialLevelId
           ? `assets/levels/${officialLevelId}.txt`
@@ -439,6 +474,10 @@ class BootScene extends s.Scene {
         "PlayerBallIconPlist",
         "assets/extraicons/player_ball_00-hd.plist",
       ),
+      this.load.image("PlayerBirdIconRaw", "assets/extraicons/bird_01-hd.png"),
+      this.load.text("PlayerBirdIconPlist", "assets/extraicons/bird_01-hd.plist"),
+      this.load.image("PlayerDartIconRaw", "assets/extraicons/dart_01-hd.png"),
+      this.load.text("PlayerDartIconPlist", "assets/extraicons/dart_01-hd.plist"),
       this.load.image("bigFont", "assets/bigFont.png"),
       this.load.text("bigFontFnt", "assets/bigFont.fnt"),
       this.load.image("goldFont", "assets/goldFont.png"),
@@ -458,6 +497,8 @@ class BootScene extends s.Scene {
   create() {
     this.cache.text.get("level_1");
     buildAtlasFromPlist(this, "PlayerBallIcon", "PlayerBallIconRaw", "PlayerBallIconPlist");
+    buildAtlasFromPlist(this, "PlayerBirdIcon", "PlayerBirdIconRaw", "PlayerBirdIconPlist");
+    buildAtlasFromPlist(this, "PlayerDartIcon", "PlayerDartIconRaw", "PlayerDartIconPlist");
     const bigFontMetadata = this.cache.text.get("bigFontFnt");
     bigFontMetadata && loadBitmapFontFromFnt(this, "bigFont", bigFontMetadata);
     const goldFontMetadata = this.cache.text.get("goldFontFnt");
@@ -482,22 +523,36 @@ class PlayerState {
       (this.isJumping = !1),
       (this.gravityFlipped = !1),
       (this.isFlying = !1),
+      (this.isMini = !1),
       (this.wasBoosted = !1),
       (this.collideTop = 0),
       (this.collideBottom = 0),
       (this.onCeiling = !1),
       (this.upKeyDown = !1),
       (this.upKeyPressed = !1),
+      (this.justPressedJump = !1),
+      (this.speedMultiplier = Ns),
+      (this.dualActive = !1),
       (this.isDead = !1);
   }
 }
 
 function decodeStartPositionMode(gameModeValue) {
-  return 1 === gameModeValue ? H : 2 === gameModeValue ? j : q;
+  return 1 === gameModeValue
+    ? H
+    : 2 === gameModeValue
+      ? j
+      : 3 === gameModeValue
+        ? ne
+        : 4 === gameModeValue
+          ? oe
+          : q;
 }
 // Atlas search order used when frame names are reused across multiple sheets.
 const ATLAS_SEARCH_ORDER = [
+  "PlayerBirdIcon",
   "PlayerBallIcon",
+  "PlayerDartIcon",
   "GJ_WebSheet",
   "GJ_GameSheet",
   "GJ_GameSheet02",
@@ -521,6 +576,15 @@ function createTextureImage(scene, x, y, textureOrFrameName) {
     : scene.textures.exists(textureOrFrameName)
       ? scene.add.image(x, y, textureOrFrameName)
       : null;
+}
+function resolveOfficialLevelId() {
+  if ("number" == typeof window.levelId && window.levelId < 0) return window.levelId;
+  try {
+    const urlLevelId = Number(new URLSearchParams(window.location.search).get("id"));
+    return Number.isFinite(urlLevelId) && urlLevelId < 0 ? urlLevelId : null;
+  } catch {
+    return null;
+  }
 }
 class LevelHitbox {
   constructor(type, x, y, width, height) {
